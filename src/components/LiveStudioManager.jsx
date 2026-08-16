@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAdmin } from '../context/AdminContext';
+import { db } from '../lib/firebase';
+import { doc, onSnapshot, updateDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import {
   Plus,
   Users,
@@ -25,21 +27,15 @@ import {
   ScreenShare,
   ScreenShareOff,
   Activity,
-  Cpu,
-  HardDrive,
   Ban,
-  Volume2,
-  VolumeX,
   Settings,
   Copy,
-  ExternalLink,
-  ChevronDown,
-  BarChart3,
   Zap,
-  Globe,
+  BarChart3,
+  HelpCircle,
 } from 'lucide-react';
 
-/* ── YouTube-like Logo ──────────────────────────────────────────── */
+/* ── YouTube Studio Logo ────────────────────────────────────────── */
 const YTStudioLogo = () => (
   <svg viewBox="0 0 28 20" width="26" height="18" fill="none">
     <rect width="28" height="20" rx="4" fill="#FF0000" />
@@ -76,7 +72,7 @@ const HealthDot = ({ status }) => {
 };
 
 /* ══════════════════════════════════════════════════════════════════ */
-/*  LiveStudioManager — ADMIN ONLY Control Panel                     */
+/*  LiveStudioManager — ADMIN LIVE CLASS Control Desk                */
 /* ══════════════════════════════════════════════════════════════════ */
 const LiveStudioManager = () => {
   const { liveClasses, toggleLiveStatus, resolveDoubt, openModal, showToast } = useAdmin();
@@ -125,47 +121,178 @@ const LiveStudioManager = () => {
     return () => clearInterval(iv);
   }, [stream?.status]);
 
-  /* ── Chat (admin moderator view) ───────────────────────────────── */
-  const [chatMessages, setChatMessages] = useState([
-    { id: 'c1', name: 'Dhairya Gulati', role: 'OWNER', text: 'Good evening students! Partnership Deed masterclass starts now.', time: '18:24', pinned: false },
-    { id: 'c2', name: 'Ananya Sharma', role: 'STUDENT', text: 'Sir please explain Interest on Capital rule 🙏', time: '18:25', pinned: false },
-    { id: 'c3', name: 'Rohan Kapoor', role: 'STUDENT', text: 'Is this stream recorded for app revision?', time: '18:26', pinned: false },
-    { id: 'c4', name: 'CA Ritu Verma', role: 'MOD', text: '📌 Doubt desk is LIVE. Ask your questions!', time: '18:27', pinned: true },
-  ]);
-  const [chatInput, setChatInput]   = useState('');
-  const [slowMode, setSlowMode]     = useState(false);
-  const [subsOnly, setSubsOnly]     = useState(false);
+  /* ── Right Panel Tabbed Interface ──────────────────────────────── */
+  const [rightPanelTab, setRightPanelTab] = useState('chat');
+
+  /* ── Firestore Real-time Live Chat Sync ────────────────────────── */
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
   const chatRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "live", "chats"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data && Array.isArray(data.messages)) {
+          setChatMessages(data.messages);
+        }
+      }
+    });
+    return unsub;
+  }, []);
 
   /* Auto-scroll chat */
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [chatMessages]);
 
-  /* Simulate incoming student messages */
+  const sendChat = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    const chatMsg = {
+      id: `m-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      user: 'Educator',
+      text: chatInput.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isTa: true
+    };
+
+    setChatInput('');
+
+    try {
+      await updateDoc(doc(db, "live", "chats"), {
+        messages: arrayUnion(chatMsg)
+      });
+    } catch (err) {
+      console.warn("Failed to send message to Firestore", err);
+    }
+  };
+
+  const deleteMessage = async (id) => {
+    try {
+      const updated = chatMessages.filter(m => m.id !== id);
+      await setDoc(doc(db, "live", "chats"), { messages: updated });
+      showToast("Message deleted from live chat.", "info");
+    } catch (err) { console.warn(err); }
+  };
+
+  const pinMessage = async (id) => {
+    try {
+      const updated = chatMessages.map(m => m.id === id ? { ...m, pinned: !m.pinned } : { ...m, pinned: false });
+      await setDoc(doc(db, "live", "chats"), { messages: updated });
+      showToast("Message pinned to top.", "info");
+    } catch (err) { console.warn(err); }
+  };
+
+  /* ── Firestore Real-time Doubts Sync ────────────────────────────── */
+  const [doubtsQueue, setDoubtsQueue] = useState([]);
+
   useEffect(() => {
-    if (stream?.status !== 'LIVE NOW') return;
-    const names = ['Kabir M.', 'Sanya G.', 'Dev Roy', 'Mehak J.', 'Aryan S.', 'Nisha P.', 'Raj K.', 'Simran T.', 'Vikram B.'];
-    const msgs  = [
-      'Super clear explanation sir! 🔥', 'Can we write goodwill directly in journal?',
-      'T.S. Grewal Q14 solved!', 'Notes PDF milenge kya?',
-      'Is this CUET 2026 relevant? 🙏', 'Sir speed thoda slow karo 😅',
-      'Thank you for free live class! ❤️', 'First time watching — amazing quality!',
-      'Board exam ke liye important hai ye?', 'Sir please repeat the last formula 🙏',
-    ];
-    const iv = setInterval(() => {
-      const name = names[Math.floor(Math.random() * names.length)];
-      const text = msgs[Math.floor(Math.random() * msgs.length)];
-      setChatMessages(prev => [...prev.slice(-60), {
-        id: `c-${Date.now()}`, name, role: 'STUDENT', text,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        pinned: false,
-      }]);
-    }, 4200);
-    return () => clearInterval(iv);
-  }, [stream?.status]);
+    const unsub = onSnapshot(doc(db, "live", "doubts"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data && Array.isArray(data.doubts)) {
+          setDoubtsQueue(data.doubts);
+        }
+      }
+    });
+    return unsub;
+  }, []);
+
+  const handleResolveDoubt = async (doubtId) => {
+    try {
+      const updated = doubtsQueue.map(d => d.id === doubtId ? { ...d, status: 'Resolved' } : d);
+      await setDoc(doc(db, "live", "doubts"), { doubts: updated });
+      showToast("Doubt marked as Resolved live!", "success");
+    } catch (err) {
+      console.warn("Failed to resolve doubt:", err);
+    }
+  };
+
+  const handlePinDoubt = async (doubtId) => {
+    try {
+      const updated = doubtsQueue.map(d => d.id === doubtId ? { ...d, status: d.status === 'Pinned' ? 'Pending' : 'Pinned' } : d);
+      await setDoc(doc(db, "live", "doubts"), { doubts: updated });
+      showToast("Doubt status updated!", "info");
+    } catch (err) {
+      console.warn("Failed to pin doubt:", err);
+    }
+  };
+
+  /* ── Firestore Real-time Live Poll Sync ────────────────────────── */
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [optA, setOptA] = useState("");
+  const [optB, setOptB] = useState("");
+  const [optC, setOptC] = useState("");
+  const [optD, setOptD] = useState("");
+  const [activePoll, setActivePoll] = useState(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "live", "currentPoll"), (snap) => {
+      if (snap.exists()) {
+        setActivePoll(snap.data());
+      } else {
+        setActivePoll(null);
+      }
+    });
+    return unsub;
+  }, []);
+
+  const handleLaunchPoll = async () => {
+    if (!pollQuestion.trim() || !optA.trim() || !optB.trim()) {
+      showToast("Please enter at least a question and options A & B.", "warning");
+      return;
+    }
+
+    const pollData = {
+      isActive: true,
+      question: pollQuestion.trim(),
+      options: [optA.trim(), optB.trim(), optC.trim() || "No Option", optD.trim() || "No Option"].filter(opt => opt !== "No Option"),
+      votes: [0, 0, 0, 0],
+      showResults: true
+    };
+
+    try {
+      await setDoc(doc(db, "live", "currentPoll"), pollData);
+      showToast("Live poll launched successfully!", "success");
+    } catch (err) {
+      console.warn("Failed to launch poll in Firestore", err);
+    }
+  };
+
+  const handleEndPoll = async () => {
+    try {
+      await updateDoc(doc(db, "live", "currentPoll"), {
+        isActive: false
+      });
+      showToast("Live poll ended.", "info");
+    } catch (err) {
+      console.warn(err);
+    }
+  };
+
+  const handleResetPoll = async () => {
+    try {
+      await setDoc(doc(db, "live", "currentPoll"), {
+        isActive: false,
+        question: "",
+        options: [],
+        votes: [],
+        showResults: false
+      });
+      setPollQuestion("");
+      setOptA("");
+      setOptB("");
+      setOptC("");
+      setOptD("");
+      showToast("Poll reset.", "info");
+    } catch (err) {
+      console.warn(err);
+    }
+  };
 
   /* ── Camera / Screen helpers ───────────────────────────────────── */
   const startCamera = async () => {
@@ -206,32 +333,12 @@ const LiveStudioManager = () => {
       setViewerCount(Math.floor(Math.random() * 300) + 800);
       setPeakViewers(0);
       setDroppedFrames(0);
-      showToast('🔴 You are LIVE! Broadcasting to students now.', 'success');
+      showToast('🔴 You are LIVE in the Virtual Classroom!', 'success');
     } else {
       stopCamera(); stopScreen();
       toggleLiveStatus(stream.id, 'Ended');
-      showToast(`Stream ended. Duration: ${fmtTime(timer)} | Peak: ${fmtNum(peakViewers)} viewers.`, 'info');
+      showToast(`Class ended. Duration: ${fmtTime(timer)}`, 'info');
     }
-  };
-
-  /* ── Chat moderation ───────────────────────────────────────────── */
-  const sendChat = (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-    setChatMessages(prev => [...prev, {
-      id: `c-${Date.now()}`, name: 'Admin (You)', role: 'OWNER', text: chatInput.trim(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), pinned: false,
-    }]);
-    setChatInput('');
-  };
-  const deleteMessage = (id) => setChatMessages(prev => prev.filter(m => m.id !== id));
-  const pinMessage = (id) => {
-    setChatMessages(prev => prev.map(m => ({ ...m, pinned: m.id === id ? !m.pinned : m.pinned })));
-    showToast('Message pin toggled.', 'info');
-  };
-  const timeoutUser = (name) => {
-    setChatMessages(prev => prev.filter(m => m.name !== name));
-    showToast(`${name} timed out from chat.`, 'info');
   };
 
   /* ── Stream list helpers ───────────────────────────────────────── */
@@ -243,17 +350,10 @@ const LiveStudioManager = () => {
   };
   const filtered = liveClasses.filter(l => activeTab === 'All' || l.status === activeTab);
 
-  /* ── Role badge styles ─────────────────────────────────────────── */
-  const roleBadge = {
-    OWNER:   { label: 'ADMIN', bg: 'bg-red-600', text: 'text-white' },
-    MOD:     { label: 'MOD',   bg: 'bg-emerald-600', text: 'text-white' },
-    STUDENT: { label: '',      bg: '', text: 'text-slate-400' },
-  };
-
   /* ─────────────────────────────────────────────────────────────── */
   return (
     <div className="flex flex-col space-y-0 pb-8">
-      {/* CSS */}
+      {/* Custom CSS scrollbars */}
       <style>{`
         .scrollbar-admin::-webkit-scrollbar { width: 4px; }
         .scrollbar-admin::-webkit-scrollbar-track { background: transparent; }
@@ -266,12 +366,12 @@ const LiveStudioManager = () => {
         <div className="flex items-center space-x-3">
           <YTStudioLogo />
           <div>
-            <h1 className="text-white font-black text-lg tracking-tight leading-none">Live Studio</h1>
-            <p className="text-slate-500 text-[10px] font-medium">Admin Control Panel · Broadcast & Moderate</p>
+            <h1 className="text-white font-black text-lg tracking-tight leading-none">Interactive Live Class Studio</h1>
+            <p className="text-slate-500 text-[10px] font-medium">Educator Dashboard · Live Interaction Control</p>
           </div>
           {stream?.status === 'LIVE NOW' && (
             <span className="px-2.5 py-1 bg-red-600 text-white text-[10px] font-black rounded flex items-center space-x-1 animate-pulse ml-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-white"></span><span>LIVE</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-white"></span><span>LIVE NOW</span>
             </span>
           )}
         </div>
@@ -279,14 +379,14 @@ const LiveStudioManager = () => {
           onClick={() => openModal('liveClass')}
           className="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-xl flex items-center space-x-1.5 transition shadow-lg shadow-red-600/20"
         >
-          <Plus className="w-3.5 h-3.5" /> <span>Schedule Stream</span>
+          <Plus className="w-3.5 h-3.5" /> <span>Schedule Live Class</span>
         </button>
       </div>
 
       {/* ══════════ MAIN 3-COLUMN LAYOUT ═══════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-        {/* ── COL 1: Stream List (3 cols) ─────────────────────── */}
+        {/* ── COL 1: Class List (3 cols) ──────────────────────── */}
         <div className="lg:col-span-3 flex flex-col space-y-3">
           {/* Tab pills */}
           <div className="flex space-x-1 bg-slate-950 p-1 rounded-xl border border-white/10 text-[10px]">
@@ -307,7 +407,7 @@ const LiveStudioManager = () => {
             ))}
           </div>
 
-          {/* Stream cards */}
+          {/* Cards */}
           <div className="space-y-2 overflow-y-auto max-h-[640px] scrollbar-admin pr-0.5">
             {filtered.map(s => (
               <button
@@ -343,14 +443,14 @@ const LiveStudioManager = () => {
           </div>
         </div>
 
-        {/* ── COL 2: Video Preview + Controls (5 cols) ───────── */}
+        {/* ── COL 2: Camera Feed + Health (5 cols) ─────────────── */}
         <div className="lg:col-span-5 flex flex-col space-y-3">
 
-          {/* Video Preview Monitor */}
-          <div className="relative w-full bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl" style={{ aspectRatio: '16/9' }}>
+          {/* Video Preview */}
+          <div className="relative w-full bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl animate-fade-in" style={{ aspectRatio: '16/9' }}>
             <video ref={videoRef} playsInline muted autoPlay className={`w-full h-full object-cover ${camOn || screenOn ? '' : 'hidden'}`} />
 
-            {/* Idle / Standby */}
+            {/* Standby / Fallback Graphics */}
             {!camOn && !screenOn && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 space-y-4">
                 {stream?.status === 'LIVE NOW' ? (
@@ -358,20 +458,20 @@ const LiveStudioManager = () => {
                     <div className="w-14 h-14 rounded-full bg-red-600/15 border border-red-500/40 flex items-center justify-center mx-auto animate-pulse">
                       <Radio className="w-7 h-7 text-red-400" />
                     </div>
-                    <p className="text-white font-bold text-sm">Stream is LIVE — no video feed</p>
-                    <p className="text-slate-500 text-xs">Enable camera or screen share below</p>
+                    <p className="text-white font-bold text-sm">Interactive Live Class is ACTIVE</p>
+                    <p className="text-slate-500 text-xs">Enable camera or screen share to start streaming</p>
                   </div>
                 ) : (
                   <div className="text-center space-y-3">
                     <YTStudioLogo />
-                    <p className="text-white font-bold text-sm mt-2">Studio Preview</p>
-                    <p className="text-slate-500 text-xs">Enable camera or share screen to preview</p>
+                    <p className="text-white font-bold text-sm mt-2">Classroom Video Monitor</p>
+                    <p className="text-slate-500 text-xs">Enable devices to preview camera output</p>
                     <div className="flex items-center justify-center space-x-2 pt-2">
                       <button onClick={startCamera} className="px-3 py-1.5 bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-bold rounded-lg flex items-center space-x-1.5 transition">
-                        <Camera className="w-3 h-3" /> <span>Camera</span>
+                        <Camera className="w-3 h-3" /> <span>Enable Cam</span>
                       </button>
                       <button onClick={startScreen} className="px-3 py-1.5 bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-bold rounded-lg flex items-center space-x-1.5 transition">
-                        <ScreenShare className="w-3 h-3" /> <span>Screen</span>
+                        <ScreenShare className="w-3 h-3" /> <span>Share Screen</span>
                       </button>
                     </div>
                     {mediaError && <p className="text-red-400 text-xs mt-2">{mediaError}</p>}
@@ -380,48 +480,46 @@ const LiveStudioManager = () => {
               </div>
             )}
 
-            {/* LIVE overlay badges */}
+            {/* Badges */}
             {stream?.status === 'LIVE NOW' && (
               <>
                 <div className="absolute top-2.5 left-2.5 flex items-center space-x-1.5 z-10">
                   <div className="flex items-center space-x-1 bg-red-600 text-white px-2 py-0.5 rounded text-[10px] font-black animate-pulse">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white"></span><span>LIVE</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-white"></span><span>LIVE CLASS</span>
                   </div>
                   <div className="bg-slate-950/80 backdrop-blur text-white px-2 py-0.5 rounded text-[10px] font-mono font-bold">{fmtTime(timer)}</div>
                 </div>
                 <div className="absolute top-2.5 right-2.5 bg-slate-950/80 backdrop-blur px-2 py-0.5 rounded text-[10px] font-bold text-white flex items-center space-x-1 z-10">
                   <Eye className="w-3 h-3 text-red-400" />
-                  <span>{fmtNum(viewerCount)}</span>
+                  <span>{fmtNum(viewerCount)} watching</span>
                 </div>
               </>
             )}
           </div>
 
-          {/* Stream Title + Info */}
+          {/* Info Card */}
           <div className="bg-slate-950 border border-white/10 rounded-xl p-3 space-y-2">
             <h3 className="text-white font-black text-sm leading-snug">{stream?.title}</h3>
             <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-400">
-              <span className="text-slate-200 font-bold">{stream?.instructor}</span>
+              <span className="text-slate-200 font-bold">Educator: {stream?.instructor}</span>
               <span>·</span>
               <span>{stream?.subject} ({stream?.classLevel})</span>
               <span>·</span>
-              <span>{stream?.scheduledTime}</span>
-              <span>·</span>
-              <span>Duration: {stream?.duration}</span>
+              <span>Class Time: {stream?.scheduledTime}</span>
             </div>
           </div>
 
-          {/* Broadcast Control Bar */}
+          {/* Educator controls */}
           <div className="bg-slate-950 border border-white/10 rounded-xl p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-white text-xs font-black">Broadcast Controls</span>
+              <span className="text-white text-xs font-black">Classroom Controls</span>
               {stream?.status === 'LIVE NOW' ? (
                 <button onClick={() => goLive('Ended')} className="flex items-center space-x-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-lg transition">
-                  <Square className="w-3 h-3 fill-white" /> <span>End Stream</span>
+                  <Square className="w-3 h-3 fill-white" /> <span>End Live Class</span>
                 </button>
               ) : (
                 <button onClick={() => goLive('LIVE NOW')} className="flex items-center space-x-1.5 px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-lg shadow-lg shadow-red-600/25 transition transform hover:scale-105">
-                  <Radio className="w-3.5 h-3.5 animate-pulse" /> <span>Go Live</span>
+                  <Radio className="w-3.5 h-3.5 animate-pulse" /> <span>Start Live Class</span>
                 </button>
               )}
             </div>
@@ -440,29 +538,28 @@ const LiveStudioManager = () => {
               <button onClick={() => screenOn ? stopScreen() : startScreen()}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition ${screenOn ? 'bg-blue-600 text-white' : 'bg-white/10 border border-white/15 text-slate-300 hover:text-white'}`}>
                 {screenOn ? <ScreenShareOff className="w-3 h-3" /> : <ScreenShare className="w-3 h-3" />}
-                <span>{screenOn ? 'Stop Share' : 'Screen Share'}</span>
+                <span>{screenOn ? 'Stop Share' : 'Share Screen'}</span>
               </button>
               <select value={quality} onChange={e => setQuality(e.target.value)}
                 className="px-2 py-1.5 bg-white/10 border border-white/15 text-slate-300 text-[11px] rounded-lg focus:outline-none">
-                <option value="1080p60">1080p60</option>
-                <option value="1080p30">1080p30</option>
-                <option value="720p30">720p30</option>
-                <option value="480p">480p</option>
+                <option value="1080p60">1080p60 (High)</option>
+                <option value="720p30">720p (Medium)</option>
+                <option value="480p">480p (Low)</option>
               </select>
             </div>
           </div>
 
-          {/* Stream Health Panel (admin only) */}
+          {/* Stats */}
           <div className="bg-slate-950 border border-white/10 rounded-xl p-3">
             <div className="flex items-center justify-between mb-2.5">
               <span className="text-white text-xs font-black flex items-center space-x-1.5">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" /> <span>Stream Health</span>
+                <Activity className="w-3.5 h-3.5 text-emerald-400" /> <span>Session Diagnostics</span>
               </span>
               <HealthDot status={streamHealth} />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: 'Viewers', value: fmtNum(viewerCount), icon: <Eye className="w-3.5 h-3.5 text-blue-400" />, sub: `Peak: ${fmtNum(peakViewers)}` },
+                { label: 'Active Students', value: fmtNum(viewerCount), icon: <Users className="w-3.5 h-3.5 text-blue-400" />, sub: `Peak: ${fmtNum(peakViewers)}` },
                 { label: 'Bitrate', value: `${bitrate} kbps`, icon: <Zap className="w-3.5 h-3.5 text-amber-400" />, sub: quality },
                 { label: 'Dropped', value: String(droppedFrames), icon: <AlertCircle className="w-3.5 h-3.5 text-red-400" />, sub: 'frames' },
                 { label: 'Uptime', value: fmtTime(timer), icon: <Clock className="w-3.5 h-3.5 text-emerald-400" />, sub: stream?.duration || '—' },
@@ -478,168 +575,269 @@ const LiveStudioManager = () => {
               ))}
             </div>
           </div>
-
-          {/* RTMP Credentials (admin only) */}
-          <div className="bg-slate-950 border border-white/10 rounded-xl p-3 space-y-2">
-            <span className="text-white text-xs font-black flex items-center space-x-1.5">
-              <Settings className="w-3.5 h-3.5 text-slate-400" /> <span>RTMP Ingestion Credentials</span>
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="bg-white/[0.04] border border-white/8 rounded-lg p-2.5">
-                <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Server URL</p>
-                <div className="flex items-center justify-between">
-                  <code className="text-amber-300 text-[11px] font-mono">rtmp://a.rtmp.youtube.com/live2</code>
-                  <button onClick={() => { navigator.clipboard?.writeText('rtmp://a.rtmp.youtube.com/live2'); showToast('Copied!', 'info'); }} className="text-slate-500 hover:text-white transition"><Copy className="w-3 h-3" /></button>
-                </div>
-              </div>
-              <div className="bg-white/[0.04] border border-white/8 rounded-lg p-2.5">
-                <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Stream Key</p>
-                <div className="flex items-center justify-between">
-                  <code className="text-slate-300 text-[11px] font-mono">{stream?.streamKey || '—'}</code>
-                  <button onClick={() => { navigator.clipboard?.writeText(stream?.streamKey || ''); showToast('Copied!', 'info'); }} className="text-slate-500 hover:text-white transition"><Copy className="w-3 h-3" /></button>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* ── COL 3: Chat Moderator + Doubt Desk (4 cols) ─────── */}
+        {/* ── COL 3: Chat / Doubts / Polls Panel (4 cols) ─────── */}
         <div className="lg:col-span-4 flex flex-col space-y-3">
 
-          {/* Live Chat Moderator Panel */}
-          <div className="bg-slate-950 border border-white/10 rounded-2xl flex flex-col overflow-hidden" style={{ height: '400px' }}>
-            {/* Chat header */}
-            <div className="px-3.5 py-2.5 border-b border-white/10 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center space-x-2">
-                <MessageSquare className="w-3.5 h-3.5 text-white" />
-                <span className="text-white font-black text-xs">Live Chat</span>
-                {stream?.status === 'LIVE NOW' && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>}
-                <span className="text-slate-500 text-[10px]">· MODERATOR VIEW</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <button
-                  onClick={() => { setSlowMode(!slowMode); showToast(slowMode ? 'Slow mode OFF' : 'Slow mode ON (30s)', 'info'); }}
-                  className={`px-2 py-0.5 rounded text-[9px] font-bold transition ${slowMode ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}
-                  title="Toggle slow mode"
-                >
-                  🐢 Slow
-                </button>
-                <button
-                  onClick={() => { setSubsOnly(!subsOnly); showToast(subsOnly ? 'Chat open to all' : 'VIP subscribers only chat', 'info'); }}
-                  className={`px-2 py-0.5 rounded text-[9px] font-bold transition ${subsOnly ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-white/5 text-slate-400 hover:text-white border border-white/10'}`}
-                  title="Toggle subscribers-only mode"
-                >
-                  🏅 Subs
-                </button>
-              </div>
+          <div className="bg-slate-950 border border-white/10 rounded-2xl flex flex-col overflow-hidden h-[640px]">
+            {/* Header Tabs */}
+            <div className="flex border-b border-white/10 bg-slate-900 text-xs">
+              <button
+                onClick={() => setRightPanelTab('chat')}
+                className={`flex-1 py-3 font-bold transition flex items-center justify-center space-x-1.5 ${
+                  rightPanelTab === 'chat' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Class Chat</span>
+              </button>
+              <button
+                onClick={() => setRightPanelTab('doubts')}
+                className={`flex-1 py-3 font-bold transition flex items-center justify-center space-x-1.5 ${
+                  rightPanelTab === 'doubts' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>Doubt Desk</span>
+              </button>
+              <button
+                onClick={() => setRightPanelTab('polls')}
+                className={`flex-1 py-3 font-bold transition flex items-center justify-center space-x-1.5 ${
+                  rightPanelTab === 'polls' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Live Polls</span>
+              </button>
             </div>
 
-            {/* Pinned message */}
-            {chatMessages.some(m => m.pinned) && (
-              <div className="px-3.5 py-2 bg-blue-500/10 border-b border-blue-500/20 flex items-start space-x-2 flex-shrink-0 text-[11px]">
-                <Pin className="w-3 h-3 text-blue-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <span className="text-blue-300 font-bold text-[10px]">📌 Pinned</span>
-                  <p className="text-white">{chatMessages.find(m => m.pinned)?.text}</p>
+            {/* TAB 1: Chat Moderator */}
+            {rightPanelTab === 'chat' && (
+              <div className="flex-1 flex flex-col justify-between overflow-hidden">
+                <div ref={chatRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-admin">
+                  {chatMessages.map(m => (
+                    <div key={m.id} className="flex items-start space-x-2 group">
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-black flex-shrink-0 mt-0.5" style={{ background: avatarColor(m.user) }}>
+                        {m.user[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline space-x-1.5 flex-wrap">
+                          <span className={`text-[11px] font-bold ${m.isTa ? 'text-amber-400' : 'text-slate-300'}`}>
+                            {m.user}
+                          </span>
+                          {m.isTa && (
+                            <span className="text-[8px] bg-red-600 text-white px-1.5 py-0.5 rounded font-black">EDUCATOR</span>
+                          )}
+                          <span className="text-[9px] text-slate-600">{m.time}</span>
+                        </div>
+                        <p className="text-slate-200 text-[11px] leading-snug">{m.text}</p>
+                      </div>
+                      {/* Mod actions */}
+                      {!m.isTa && (
+                        <div className="flex items-center space-x-0.5 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
+                          <button onClick={() => pinMessage(m.id)} className="p-1 text-slate-500 hover:text-blue-400 transition" title="Pin message"><Pin className="w-3 h-3" /></button>
+                          <button onClick={() => deleteMessage(m.id)} className="p-1 text-slate-500 hover:text-red-400 transition" title="Delete message"><Trash2 className="w-3 h-3" /></button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {chatMessages.length === 0 && (
+                    <div className="py-8 text-center text-slate-500 text-[11px]">Chat feed is empty.</div>
+                  )}
+                </div>
+
+                <div className="px-3.5 py-2.5 border-t border-white/10 bg-slate-950 flex-shrink-0">
+                  <form onSubmit={sendChat} className="flex items-center space-x-2">
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center text-white font-black text-[9px] flex-shrink-0">D</div>
+                    <input
+                      type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
+                      placeholder="Send message to class..."
+                      className="flex-1 bg-white/5 border border-white/15 text-white placeholder-slate-500 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-white/30"
+                    />
+                    <button type="submit" disabled={!chatInput.trim()} className="p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition disabled:opacity-30">
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+                  </form>
                 </div>
               </div>
             )}
 
-            {/* Chat messages */}
-            <div ref={chatRef} className="flex-1 overflow-y-auto px-3.5 py-2 space-y-2 scrollbar-admin">
-              {chatMessages.map(m => (
-                <div key={m.id} className="flex items-start space-x-2 group">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-black flex-shrink-0 mt-0.5" style={{ background: avatarColor(m.name) }}>
-                    {m.name[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline space-x-1.5 flex-wrap">
-                      <span className={`text-[11px] font-bold ${m.role === 'OWNER' ? 'text-amber-400' : m.role === 'MOD' ? 'text-emerald-400' : 'text-slate-300'}`}>
-                        {m.name}
-                      </span>
-                      {roleBadge[m.role]?.label && (
-                        <span className={`text-[8px] px-1 py-0.5 rounded font-black ${roleBadge[m.role].bg} ${roleBadge[m.role].text}`}>
-                          {roleBadge[m.role].label}
-                        </span>
+            {/* TAB 2: Doubt Desk */}
+            {rightPanelTab === 'doubts' && (
+              <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-admin">
+                <div className="flex items-center justify-between text-xs border-b border-white/10 pb-2">
+                  <span className="text-white font-black">Active Doubts Queue</span>
+                  <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded">
+                    {doubtsQueue.filter(d => d.status !== 'Resolved').length} Pending
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {doubtsQueue.map(d => (
+                    <div key={d.id} className={`p-3 rounded-xl border text-[11px] space-y-1.5 transition ${
+                      d.status === 'Pinned' ? 'bg-amber-500/10 border-amber-500/40 text-slate-200' :
+                      d.status === 'Resolved' ? 'bg-white/[0.02] border-white/5 opacity-50 text-slate-400' :
+                      'bg-white/[0.03] border-white/10 text-slate-200'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white font-bold">{d.student}</span>
+                        <div className="flex items-center space-x-1.5">
+                          <span className={`text-[8px] px-1.5 py-0.5 rounded font-black ${
+                            d.status === 'Pinned' ? 'bg-amber-500/20 text-amber-300' :
+                            d.status === 'Resolved' ? 'bg-green-500/20 text-green-300' :
+                            'bg-slate-800 text-slate-400'
+                          }`}>{d.status}</span>
+                        </div>
+                      </div>
+                      <p className="text-slate-300 leading-relaxed">{d.question}</p>
+                      
+                      {d.status !== 'Resolved' && (
+                        <div className="flex items-center justify-end space-x-2 pt-1.5 border-t border-white/5">
+                          <button
+                            onClick={() => handlePinDoubt(d.id)}
+                            className="px-2 py-1 bg-white/10 hover:bg-white/15 text-white font-bold text-[10px] rounded transition"
+                          >
+                            {d.status === 'Pinned' ? 'Unpin' : 'Pin to Screen'}
+                          </button>
+                          <button
+                            onClick={() => handleResolveDoubt(d.id)}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] rounded transition flex items-center space-x-1"
+                          >
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>Resolve</span>
+                          </button>
+                        </div>
                       )}
-                      <span className="text-[9px] text-slate-600">{m.time}</span>
                     </div>
-                    <p className="text-slate-200 text-[11px] leading-snug">{m.text}</p>
-                  </div>
-                  {/* Mod actions — visible on hover */}
-                  {m.role === 'STUDENT' && (
-                    <div className="flex items-center space-x-0.5 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
-                      <button onClick={() => pinMessage(m.id)} className="p-1 text-slate-500 hover:text-blue-400 transition" title="Pin message"><Pin className="w-3 h-3" /></button>
-                      <button onClick={() => deleteMessage(m.id)} className="p-1 text-slate-500 hover:text-red-400 transition" title="Delete message"><Trash2 className="w-3 h-3" /></button>
-                      <button onClick={() => timeoutUser(m.name)} className="p-1 text-slate-500 hover:text-amber-400 transition" title="Timeout user"><Ban className="w-3 h-3" /></button>
-                    </div>
+                  ))}
+                  {doubtsQueue.length === 0 && (
+                    <div className="py-8 text-center text-slate-500 text-[11px]">No student doubts submitted yet.</div>
                   )}
                 </div>
-              ))}
-            </div>
-
-            {/* Admin chat input */}
-            <div className="px-3.5 py-2 border-t border-white/10 flex-shrink-0">
-              <form onSubmit={sendChat} className="flex items-center space-x-2">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center text-white font-black text-[9px] flex-shrink-0">D</div>
-                <input
-                  type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
-                  placeholder="Send message as Admin..."
-                  className="flex-1 bg-white/5 border border-white/15 text-white placeholder-slate-500 rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-white/30"
-                />
-                <button type="submit" disabled={!chatInput.trim()} className="p-1.5 text-white hover:text-blue-400 transition disabled:opacity-30">
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* 2-Teacher Doubt Desk */}
-          <div className="bg-slate-950 border border-white/10 rounded-2xl p-3.5 space-y-3 flex-1 overflow-hidden">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Shield className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-white font-black text-xs">2-Teacher Doubt Desk</span>
-                <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-300 text-[9px] font-bold rounded border border-blue-500/30">
-                  {stream?.doubtsQueue?.filter(d => d.status !== 'Resolved').length || 0} pending
-                </span>
               </div>
-              <span className="text-[10px] text-slate-500">TA: <strong className="text-emerald-400">{stream?.assistantTeacher}</strong></span>
-            </div>
+            )}
 
-            <div className="space-y-2 max-h-[260px] overflow-y-auto scrollbar-admin pr-0.5">
-              {(stream?.doubtsQueue || []).map(d => (
-                <div key={d.id} className={`p-3 rounded-xl border text-[11px] space-y-1.5 ${
-                  d.status === 'Pinned' ? 'bg-amber-500/10 border-amber-500/40' :
-                  d.status === 'Resolved' ? 'bg-white/[0.02] border-white/5 opacity-50' :
-                  'bg-white/[0.03] border-white/10'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-white font-bold">{d.student}</span>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${
-                      d.status === 'Pinned' ? 'bg-amber-500/20 text-amber-300' :
-                      d.status === 'Resolved' ? 'bg-green-500/20 text-green-300' :
-                      'bg-slate-800 text-slate-400'
-                    }`}>{d.status}</span>
+            {/* TAB 3: Polls Creator & Results */}
+            {rightPanelTab === 'polls' && (
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-admin">
+                {activePoll && activePoll.isActive ? (
+                  /* Active Poll Display and Results graph */
+                  <div className="bg-purple-500/10 border border-purple-500/30 p-3.5 rounded-xl space-y-3.5">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="px-2 py-0.5 bg-purple-500 text-white font-black rounded uppercase">Active Poll</span>
+                      <span className="text-purple-300 font-bold">Collecting Student Responses</span>
+                    </div>
+
+                    <p className="font-bold text-white text-xs leading-relaxed">{activePoll.question}</p>
+
+                    <div className="space-y-2">
+                      {activePoll.options.map((opt, idx) => {
+                        const totalVotes = activePoll.votes.reduce((a, b) => a + b, 0) || 1;
+                        const percentage = Math.round(((activePoll.votes[idx] || 0) / totalVotes) * 100);
+
+                        return (
+                          <div key={idx} className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-slate-200 font-bold">{opt}</span>
+                              <span className="text-purple-300 font-bold">{percentage}% ({activePoll.votes[idx] || 0})</span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-white/5">
+                              <div className="h-full bg-purple-500 rounded-full" style={{ width: `${percentage}%` }}></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex space-x-2 pt-2">
+                      <button
+                        onClick={handleEndPoll}
+                        className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-lg transition"
+                      >
+                        End Poll
+                      </button>
+                      <button
+                        onClick={handleResetPoll}
+                        className="flex-1 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-lg transition"
+                      >
+                        Reset
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-slate-300 leading-relaxed">{d.question}</p>
-                  {d.status !== 'Resolved' && (
+                ) : (
+                  /* Poll Creator Form */
+                  <div className="space-y-3.5">
+                    <span className="text-white text-xs font-black block border-b border-white/10 pb-2">Launch Classroom Quiz / Poll</span>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-400 font-bold">Quiz / Poll Question:</label>
+                      <input
+                        type="text"
+                        value={pollQuestion}
+                        onChange={e => setPollQuestion(e.target.value)}
+                        placeholder="e.g. Rate of Interest on Loan in absence of deed?"
+                        className="w-full bg-white/5 border border-white/15 text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] text-slate-400 font-bold">Options:</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={optA}
+                          onChange={e => setOptA(e.target.value)}
+                          placeholder="Option A (e.g. 6% p.a.)"
+                          className="w-full bg-white/5 border border-white/15 text-white rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-purple-500"
+                        />
+                        <input
+                          type="text"
+                          value={optB}
+                          onChange={e => setOptB(e.target.value)}
+                          placeholder="Option B (e.g. 12% p.a.)"
+                          className="w-full bg-white/5 border border-white/15 text-white rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-purple-500"
+                        />
+                        <input
+                          type="text"
+                          value={optC}
+                          onChange={e => setOptC(e.target.value)}
+                          placeholder="Option C (Optional)"
+                          className="w-full bg-white/5 border border-white/15 text-white rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-purple-500"
+                        />
+                        <input
+                          type="text"
+                          value={optD}
+                          onChange={e => setOptD(e.target.value)}
+                          placeholder="Option D (Optional)"
+                          className="w-full bg-white/5 border border-white/15 text-white rounded-lg px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                    </div>
+
                     <button
-                      onClick={() => resolveDoubt(stream.id, d.id)}
-                      className="w-full py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] rounded-lg flex items-center justify-center space-x-1 transition"
+                      onClick={handleLaunchPoll}
+                      className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow transition"
                     >
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>Answer & Resolve</span>
+                      Launch Poll to Students Screen 🚀
                     </button>
-                  )}
-                </div>
-              ))}
-              {(!stream?.doubtsQueue || stream.doubtsQueue.length === 0) && (
-                <div className="py-6 text-center text-slate-500 text-[11px]">
-                  No doubts yet. Go live to receive student questions.
-                </div>
-              )}
-            </div>
+
+                    {activePoll && (
+                      <div className="p-3 bg-slate-900 rounded-lg border border-white/10 text-[11px] space-y-1.5">
+                        <p className="font-bold text-white">Previous Poll Result:</p>
+                        <p className="text-slate-400 font-mono">Q: {activePoll.question}</p>
+                        <button
+                          onClick={handleResetPoll}
+                          className="text-[10px] text-purple-400 font-bold hover:underline"
+                        >
+                          Clear Previous Results
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

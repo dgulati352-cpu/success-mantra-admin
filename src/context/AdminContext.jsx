@@ -143,6 +143,47 @@ export const AdminProvider = ({ children }) => {
     }
   };
 
+  // Publish Live Broadcast State & All Live Classes to Firestore for cross-origin student sync
+  const publishLiveStatusToFirestore = async (updatedLiveClasses) => {
+    try {
+      const activeLiveSession = updatedLiveClasses.find((l) => l.status === 'LIVE NOW');
+
+      // 1. Publish current live broadcast signal
+      await setDoc(doc(db, 'live', 'currentBroadcast'), {
+        isLive: !!activeLiveSession,
+        activeSession: activeLiveSession || null,
+        title: activeLiveSession?.title || '',
+        teacher: activeLiveSession?.instructor || activeLiveSession?.teacher || '',
+        subject: activeLiveSession?.subject || '',
+        classLevel: activeLiveSession?.classLevel || '',
+        viewers: activeLiveSession?.currentViewers || 1480,
+        updatedAt: Date.now(),
+      });
+
+      // 2. Publish list of all live classes for student portal dashboard
+      await setDoc(doc(db, 'live', 'allLiveClasses'), {
+        classes: updatedLiveClasses,
+        updatedAt: Date.now(),
+      });
+
+      // Local fallback for same-domain
+      const broadcastData = {
+        isLive: !!activeLiveSession,
+        teacher: activeLiveSession?.instructor || activeLiveSession?.teacher,
+        title: activeLiveSession?.title,
+        session: activeLiveSession,
+      };
+      localStorage.setItem('sm_live_broadcast', JSON.stringify(broadcastData));
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('sm_live_channel');
+        bc.postMessage(broadcastData);
+        bc.close();
+      }
+    } catch (e) {
+      console.warn('Failed to publish live status to Firestore:', e);
+    }
+  };
+
   // Toast Helper
   const showToast = (message, type = 'info') => {
     const id = Date.now();
@@ -186,8 +227,10 @@ export const AdminProvider = ({ children }) => {
 
   // Live Classes Management
   const saveLiveClass = (liveData) => {
+    let updated;
     if (liveData.id) {
-      setLiveClasses((prev) => prev.map((l) => (l.id === liveData.id ? liveData : l)));
+      updated = liveClasses.map((l) => (l.id === liveData.id ? liveData : l));
+      setLiveClasses(updated);
       showToast(`Updated Live Session "${liveData.title}"`, 'success');
     } else {
       const newLive = {
@@ -198,30 +241,34 @@ export const AdminProvider = ({ children }) => {
         peakViewers: 0,
         doubtsQueue: [],
       };
-      setLiveClasses((prev) => [newLive, ...prev]);
+      updated = [newLive, ...liveClasses];
+      setLiveClasses(updated);
       showToast(`Scheduled new Live Session "${liveData.title}"`, 'success');
     }
+    publishLiveStatusToFirestore(updated);
     closeModal();
   };
 
   const toggleLiveStatus = (id, newStatus) => {
-    setLiveClasses((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const currentViewers = newStatus === 'LIVE NOW' ? Math.floor(Math.random() * 500) + 1000 : 0;
-          let doubts = l.doubtsQueue || [];
-          if (newStatus === 'LIVE NOW' && doubts.length === 0) {
-            doubts = [
-              { id: `d-${Date.now()}-1`, student: "Dhairya Gulati", question: `Sir, can you please explain ${l.subject} numerical formula step-by-step?`, time: "Just now", status: "Pending" },
-              { id: `d-${Date.now()}-2`, student: "Ananya Sharma", question: "Is this chapter weightage high in CBSE Board Exam?", time: "1 min ago", status: "Pending" },
-              { id: `d-${Date.now()}-3`, student: "Rohan Kapoor", question: "Can we get the PDF notes of this live masterclass in student portal?", time: "2 mins ago", status: "Pinned" },
-            ];
-          }
-          return { ...l, status: newStatus, currentViewers, doubtsQueue: doubts };
+    const updated = liveClasses.map((l) => {
+      if (l.id === id) {
+        const currentViewers = newStatus === 'LIVE NOW' ? Math.floor(Math.random() * 500) + 1000 : 0;
+        let doubts = l.doubtsQueue || [];
+        if (newStatus === 'LIVE NOW' && doubts.length === 0) {
+          doubts = [
+            { id: `d-${Date.now()}-1`, student: "Dhairya Gulati", question: `Sir, can you please explain ${l.subject} numerical formula step-by-step?`, time: "Just now", status: "Pending" },
+            { id: `d-${Date.now()}-2`, student: "Ananya Sharma", question: "Is this chapter weightage high in CBSE Board Exam?", time: "1 min ago", status: "Pending" },
+            { id: `d-${Date.now()}-3`, student: "Rohan Kapoor", question: "Can we get the PDF notes of this live masterclass in student portal?", time: "2 mins ago", status: "Pinned" },
+          ];
         }
-        return l;
-      })
-    );
+        return { ...l, status: newStatus, currentViewers, doubtsQueue: doubts };
+      }
+      // If setting newStatus === 'LIVE NOW', mark other streams as non-live if needed
+      return newStatus === 'LIVE NOW' ? { ...l, status: l.status === 'LIVE NOW' ? 'Ended' : l.status } : l;
+    });
+
+    setLiveClasses(updated);
+    publishLiveStatusToFirestore(updated);
     showToast(`Live Stream status changed to ${newStatus}`, 'info');
   };
 
