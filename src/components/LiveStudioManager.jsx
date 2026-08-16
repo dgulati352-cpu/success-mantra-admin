@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAdmin } from '../context/AdminContext';
 import { db } from '../lib/firebase';
+import { BroadcastSession } from '../lib/webrtcBroadcaster';
 import { doc, onSnapshot, updateDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import {
   Plus,
@@ -130,6 +131,7 @@ const LiveStudioManager = () => {
   const chatRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const broadcasterRef = useRef(null); // WebRTC BroadcastSession instance
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "live", "chats"), (snap) => {
@@ -302,39 +304,67 @@ const LiveStudioManager = () => {
       streamRef.current = ms;
       if (videoRef.current) { videoRef.current.srcObject = ms; videoRef.current.play(); }
       setCamOn(true);
-    } catch { setMediaError('Camera permission denied. Allow camera access in browser settings.'); }
+      return ms;
+    } catch {
+      setMediaError('Camera permission denied. Allow camera access in browser settings.');
+      return null;
+    }
   };
   const stopCamera = () => {
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
+    streamRef.current = null;
     setCamOn(false);
   };
   const startScreen = async () => {
     try {
-      const ms = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const ms = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       streamRef.current = ms;
       if (videoRef.current) { videoRef.current.srcObject = ms; videoRef.current.play(); }
       setScreenOn(true); setCamOn(false);
       ms.getVideoTracks()[0].onended = () => stopScreen();
-    } catch { /* user cancelled */ }
+      return ms;
+    } catch { return null; }
   };
   const stopScreen = () => {
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
+    streamRef.current = null;
     setScreenOn(false);
   };
 
-  /* ── Go Live / End ─────────────────────────────────────────────── */
+  /* ── Go Live / End (with WebRTC Broadcasting) ──────────────────── */
   const goLive = async (targetStatus) => {
     if (targetStatus === 'LIVE NOW') {
-      await startCamera();
+      const ms = await startCamera();
       toggleLiveStatus(stream.id, 'LIVE NOW');
       setActiveTab('LIVE NOW');
       setViewerCount(Math.floor(Math.random() * 300) + 800);
       setPeakViewers(0);
       setDroppedFrames(0);
-      showToast('🔴 You are LIVE in the Virtual Classroom!', 'success');
+
+      // 🔴 Start WebRTC broadcast so students receive the actual live video
+      if (ms) {
+        try {
+          const broadcaster = new BroadcastSession(ms, (count) => {
+            if (count > 0) setViewerCount(v => Math.max(v, count));
+          });
+          broadcasterRef.current = broadcaster;
+          await broadcaster.start();
+          showToast('🔴 You are LIVE! Students can now see your camera feed.', 'success');
+        } catch (err) {
+          console.warn('WebRTC broadcast start failed:', err);
+          showToast('🔴 You are LIVE (stream metadata sent, WebRTC unavailable in this browser)', 'success');
+        }
+      } else {
+        showToast('🔴 You are LIVE in the Virtual Classroom!', 'success');
+      }
     } else {
+      // Stop WebRTC broadcast
+      if (broadcasterRef.current) {
+        await broadcasterRef.current.stop().catch(() => {});
+        broadcasterRef.current = null;
+      }
       stopCamera(); stopScreen();
       toggleLiveStatus(stream.id, 'Ended');
       showToast(`Class ended. Duration: ${fmtTime(timer)}`, 'info');
