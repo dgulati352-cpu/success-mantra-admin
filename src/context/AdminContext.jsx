@@ -83,6 +83,35 @@ export const AdminProvider = ({ children }) => {
   useEffect(() => { localStorage.setItem('sm_admin_broadcasts', JSON.stringify(broadcasts)); }, [broadcasts]);
   useEffect(() => { localStorage.setItem('sm_admin_vip', JSON.stringify(vipPlans)); }, [vipPlans]);
 
+  // Publish books catalog to student portal via shared localStorage key + BroadcastChannel
+  const publishBooksToCatalog = (updatedBooks) => {
+    try {
+      // Map admin book fields -> student BookItem fields
+      const catalogBooks = updatedBooks.map((b) => ({
+        id: b.id,
+        title: b.title,
+        author: b.author,
+        targetExam: b.targetExam || 'CBSE',
+        classLevel: b.classLevel || 'Both',
+        price: b.price || 0,
+        originalPrice: b.originalPrice || b.price || 0,
+        coverImage: b.image || b.coverImage || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
+        rating: b.rating || 4.8,
+        inStock: b.status !== 'Out of Stock',
+        subject: b.subject || '',
+        discount: b.discount || '',
+      }));
+      localStorage.setItem('sm_books_catalog', JSON.stringify(catalogBooks));
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('sm_books_channel');
+        bc.postMessage({ type: 'BOOKS_UPDATED', books: catalogBooks });
+        bc.close();
+      }
+    } catch (e) {
+      console.warn('Failed to publish books catalog:', e);
+    }
+  };
+
   // Toast Helper
   const showToast = (message, type = 'info') => {
     const id = Date.now();
@@ -208,8 +237,10 @@ export const AdminProvider = ({ children }) => {
 
   // Bookstore & Inventory CRUD
   const saveBook = (bookData) => {
+    let updatedBooks;
     if (bookData.id) {
-      setBooks((prev) => prev.map((b) => (b.id === bookData.id ? bookData : b)));
+      updatedBooks = books.map((b) => (b.id === bookData.id ? bookData : b));
+      setBooks(updatedBooks);
       showToast(`Updated book "${bookData.title}"`, 'success');
     } else {
       const newBook = {
@@ -218,14 +249,18 @@ export const AdminProvider = ({ children }) => {
         rating: 5.0,
         status: bookData.stock > 10 ? 'In Stock' : bookData.stock > 0 ? 'Low Stock' : 'Out of Stock',
       };
-      setBooks((prev) => [newBook, ...prev]);
-      showToast(`Added new book "${bookData.title}" to Bookstore`, 'success');
+      updatedBooks = [newBook, ...books];
+      setBooks(updatedBooks);
+      showToast(`Added new book "${bookData.title}" to Bookstore & Student Portal`, 'success');
     }
+    publishBooksToCatalog(updatedBooks);
     closeModal();
   };
 
   const deleteBook = (id) => {
-    setBooks((prev) => prev.filter((b) => b.id !== id));
+    const updatedBooks = books.filter((b) => b.id !== id);
+    setBooks(updatedBooks);
+    publishBooksToCatalog(updatedBooks);
     showToast('Removed book from catalog', 'warning');
   };
 
