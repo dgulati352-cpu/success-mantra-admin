@@ -156,6 +156,7 @@ export const AdminProvider = ({ children }) => {
         teacher: activeLiveSession?.instructor || activeLiveSession?.teacher || '',
         subject: activeLiveSession?.subject || '',
         classLevel: activeLiveSession?.classLevel || '',
+        meetLink: activeLiveSession?.meetLink || 'https://meet.google.com/abc-defg-hij',
         viewers: activeLiveSession?.currentViewers || 1480,
         updatedAt: Date.now(),
       });

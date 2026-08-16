@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Radio,
   Eye,
+  Video,
   Signal,
   Wifi,
   Pin,
@@ -304,29 +305,76 @@ const LiveStudioManager = () => {
       streamRef.current = ms;
       if (videoRef.current) { videoRef.current.srcObject = ms; videoRef.current.play(); }
       setCamOn(true);
+
+      // Start WebRTC broadcast & update Firestore so student side gets teacher video
+      try {
+        if (broadcasterRef.current) {
+          await broadcasterRef.current.stop().catch(() => {});
+        }
+        const broadcaster = new BroadcastSession(ms, (count) => {
+          if (count > 0) setViewerCount(v => Math.max(v, count));
+        });
+        broadcasterRef.current = broadcaster;
+        await broadcaster.start();
+      } catch (e) {
+        console.warn('WebRTC broadcast start warning:', e);
+      }
+
+      // Signal camera active in currentBroadcast doc
+      try {
+        await updateDoc(doc(db, 'live', 'currentBroadcast'), {
+          cameraActive: true,
+          updatedAt: Date.now()
+        });
+      } catch (e) { console.warn(e); }
+
       return ms;
     } catch {
       setMediaError('Camera permission denied. Allow camera access in browser settings.');
       return null;
     }
   };
+
   const stopCamera = () => {
+    if (broadcasterRef.current) {
+      broadcasterRef.current.stop().catch(() => {});
+      broadcasterRef.current = null;
+    }
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
     streamRef.current = null;
     setCamOn(false);
+    updateDoc(doc(db, 'live', 'currentBroadcast'), { cameraActive: false, updatedAt: Date.now() }).catch(() => {});
   };
+
   const startScreen = async () => {
     try {
       const ms = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       streamRef.current = ms;
       if (videoRef.current) { videoRef.current.srcObject = ms; videoRef.current.play(); }
       setScreenOn(true); setCamOn(false);
+
+      try {
+        if (broadcasterRef.current) {
+          await broadcasterRef.current.stop().catch(() => {});
+        }
+        const broadcaster = new BroadcastSession(ms, (count) => {
+          if (count > 0) setViewerCount(v => Math.max(v, count));
+        });
+        broadcasterRef.current = broadcaster;
+        await broadcaster.start();
+      } catch (e) { console.warn(e); }
+
       ms.getVideoTracks()[0].onended = () => stopScreen();
       return ms;
     } catch { return null; }
   };
+
   const stopScreen = () => {
+    if (broadcasterRef.current) {
+      broadcasterRef.current.stop().catch(() => {});
+      broadcasterRef.current = null;
+    }
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     if (videoRef.current) videoRef.current.srcObject = null;
     streamRef.current = null;
@@ -541,17 +589,30 @@ const LiveStudioManager = () => {
 
           {/* Educator controls */}
           <div className="bg-slate-950 border border-white/10 rounded-xl p-3 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-white text-xs font-black">Classroom Controls</span>
-              {stream?.status === 'LIVE NOW' ? (
-                <button onClick={() => goLive('Ended')} className="flex items-center space-x-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-lg transition">
-                  <Square className="w-3 h-3 fill-white" /> <span>End Live Class</span>
-                </button>
-              ) : (
-                <button onClick={() => goLive('LIVE NOW')} className="flex items-center space-x-1.5 px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-lg shadow-lg shadow-red-600/25 transition transform hover:scale-105">
-                  <Radio className="w-3.5 h-3.5 animate-pulse" /> <span>Start Live Class</span>
-                </button>
-              )}
+              <div className="flex items-center space-x-2">
+                <a
+                  href={stream?.meetLink || 'https://meet.google.com/abc-defg-hij'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => goLive('LIVE NOW')}
+                  className="flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-lg shadow-lg shadow-emerald-600/25 transition transform hover:scale-105"
+                >
+                  <Video className="w-3.5 h-3.5" />
+                  <span>🟢 Launch Google Meet</span>
+                </a>
+
+                {stream?.status === 'LIVE NOW' ? (
+                  <button onClick={() => goLive('Ended')} className="flex items-center space-x-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-lg transition">
+                    <Square className="w-3 h-3 fill-white" /> <span>End Live Class</span>
+                  </button>
+                ) : (
+                  <button onClick={() => goLive('LIVE NOW')} className="flex items-center space-x-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-lg shadow-lg shadow-red-600/25 transition">
+                    <Radio className="w-3.5 h-3.5 animate-pulse" /> <span>Start Web Studio</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center flex-wrap gap-2">
