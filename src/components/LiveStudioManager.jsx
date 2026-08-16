@@ -527,12 +527,6 @@ const LiveStudioManager = () => {
 
           {/* Video Preview */}
           <div className="relative w-full bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl animate-fade-in" style={{ aspectRatio: '16/9' }}>
-            <iframe
-              src={`https://meet.jit.si/SuccessMantra_LiveClass_${stream?.id || '123'}#config.prejoinPageEnabled=false&interfaceConfig.TOOLBAR_BUTTONS=['microphone','camera','closedcaptions','desktop','fullscreen','tileview']`}
-              allow="camera; microphone; display-capture; autoplay; clipboard-write; encrypted-media"
-              className="w-full h-full border-0 absolute inset-0 z-10"
-              title="Admin Live Studio Google Meet"
-            />
             <video ref={videoRef} playsInline muted autoPlay className={`w-full h-full object-cover z-20 ${camOn || screenOn ? '' : 'hidden'}`} />
 
             {/* Standby / Fallback Graphics */}
@@ -599,24 +593,13 @@ const LiveStudioManager = () => {
             <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-white text-xs font-black">Classroom Controls</span>
               <div className="flex items-center space-x-2">
-                <a
-                  href={stream?.meetLink || 'https://meet.google.com/abc-defg-hij'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => goLive('LIVE NOW')}
-                  className="flex items-center space-x-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-lg shadow-lg shadow-emerald-600/25 transition transform hover:scale-105"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                  <span>🟢 Launch Google Meet</span>
-                </a>
-
                 {stream?.status === 'LIVE NOW' ? (
                   <button onClick={() => goLive('Ended')} className="flex items-center space-x-1.5 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-black text-xs rounded-lg transition">
                     <Square className="w-3 h-3 fill-white" /> <span>End Live Class</span>
                   </button>
                 ) : (
-                  <button onClick={() => goLive('LIVE NOW')} className="flex items-center space-x-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-lg shadow-lg shadow-red-600/25 transition">
-                    <Radio className="w-3.5 h-3.5 animate-pulse" /> <span>Start Web Studio</span>
+                  <button onClick={() => goLive('LIVE NOW')} className="flex items-center space-x-1.5 px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-lg shadow-lg shadow-red-600/25 transition transform hover:scale-105">
+                    <Radio className="w-3.5 h-3.5 animate-pulse" /> <span>Go Live</span>
                   </button>
                 )}
               </div>

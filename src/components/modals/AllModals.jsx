@@ -261,13 +261,12 @@ const LiveClassModalForm = ({ data, saveLiveClass, closeModal }) => {
             />
           </div>
           <div>
-            <label className="text-slate-400 font-semibold block mb-1">Google Meet Link (Live Class)</label>
+            <label className="text-slate-400 font-semibold block mb-1">RTMP Stream Key</label>
             <input
               type="text"
-              value={formData.meetLink || 'https://meet.google.com/abc-defg-hij'}
-              onChange={(e) => setFormData({ ...formData, meetLink: e.target.value })}
-              placeholder="https://meet.google.com/..."
-              className="w-full bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-xs rounded-xl px-3.5 py-2 focus:outline-none focus:border-emerald-500"
+              readOnly
+              value={formData.streamKey || 'live_key_98765'}
+              className="w-full bg-slate-950 border border-slate-800 text-amber-300 font-mono text-xs rounded-xl px-3.5 py-2"
             />
           </div>
         </div>
