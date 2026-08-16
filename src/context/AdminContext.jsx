@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import {
   INITIAL_STATS,
   INITIAL_COURSES,
@@ -83,8 +85,8 @@ export const AdminProvider = ({ children }) => {
   useEffect(() => { localStorage.setItem('sm_admin_broadcasts', JSON.stringify(broadcasts)); }, [broadcasts]);
   useEffect(() => { localStorage.setItem('sm_admin_vip', JSON.stringify(vipPlans)); }, [vipPlans]);
 
-  // Publish books catalog to student portal via shared localStorage key + BroadcastChannel
-  const publishBooksToCatalog = (updatedBooks) => {
+  // Publish books catalog to Firestore + localStorage fallback for real-time student portal sync
+  const publishBooksToCatalog = async (updatedBooks) => {
     try {
       // Map admin book fields -> student BookItem fields
       const catalogBooks = updatedBooks.map((b) => ({
@@ -101,6 +103,15 @@ export const AdminProvider = ({ children }) => {
         subject: b.subject || '',
         discount: b.discount || '',
       }));
+
+      // Write to Firestore for cross-device real-time sync
+      await setDoc(doc(db, 'catalog', 'booksCatalog'), {
+        books: catalogBooks,
+        updatedAt: Date.now(),
+        updatedBy: 'admin',
+      });
+
+      // Also keep localStorage as instant same-device fallback
       localStorage.setItem('sm_books_catalog', JSON.stringify(catalogBooks));
       if ('BroadcastChannel' in window) {
         const bc = new BroadcastChannel('sm_books_channel');
@@ -108,7 +119,27 @@ export const AdminProvider = ({ children }) => {
         bc.close();
       }
     } catch (e) {
-      console.warn('Failed to publish books catalog:', e);
+      console.warn('Failed to publish books catalog to Firestore:', e);
+      // Fallback: localStorage only
+      try {
+        const catalogBooks = updatedBooks.map((b) => ({
+          id: b.id,
+          title: b.title,
+          author: b.author,
+          targetExam: b.targetExam || 'CBSE',
+          classLevel: b.classLevel || 'Both',
+          price: b.price || 0,
+          originalPrice: b.originalPrice || b.price || 0,
+          coverImage: b.image || b.coverImage || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=400&auto=format&fit=crop&q=80',
+          rating: b.rating || 4.8,
+          inStock: b.status !== 'Out of Stock',
+          subject: b.subject || '',
+          discount: b.discount || '',
+        }));
+        localStorage.setItem('sm_books_catalog', JSON.stringify(catalogBooks));
+      } catch (le) {
+        console.warn('localStorage fallback also failed:', le);
+      }
     }
   };
 
