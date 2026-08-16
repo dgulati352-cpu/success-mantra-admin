@@ -90,6 +90,7 @@ const LiveStudioManager = () => {
   const [camOn, setCamOn]         = useState(false);
   const [micOn, setMicOn]         = useState(true);
   const [screenOn, setScreenOn]   = useState(false);
+  const [meetEmbedActive, setMeetEmbedActive] = useState(false);
   const [mediaError, setMediaError] = useState(null);
   const [quality, setQuality]     = useState('1080p60');
 
@@ -526,7 +527,13 @@ const LiveStudioManager = () => {
 
           {/* Video Preview */}
           <div className="relative w-full bg-black rounded-2xl overflow-hidden border border-white/10 shadow-2xl animate-fade-in" style={{ aspectRatio: '16/9' }}>
-            <video ref={videoRef} playsInline muted autoPlay className={`w-full h-full object-cover ${camOn || screenOn ? '' : 'hidden'}`} />
+            <iframe
+              src={`https://meet.jit.si/SuccessMantra_LiveClass_${stream?.id || '123'}#config.prejoinPageEnabled=false&interfaceConfig.TOOLBAR_BUTTONS=['microphone','camera','closedcaptions','desktop','fullscreen','tileview']`}
+              allow="camera; microphone; display-capture; autoplay; clipboard-write; encrypted-media"
+              className="w-full h-full border-0 absolute inset-0 z-10"
+              title="Admin Live Studio Google Meet"
+            />
+            <video ref={videoRef} playsInline muted autoPlay className={`w-full h-full object-cover z-20 ${camOn || screenOn ? '' : 'hidden'}`} />
 
             {/* Standby / Fallback Graphics */}
             {!camOn && !screenOn && (
