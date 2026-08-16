@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '../context/AdminContext';
 import {
   Video,
@@ -16,6 +16,7 @@ import {
   Radio,
   Send,
   Camera,
+  CameraOff,
   Mic,
   MicOff,
   Monitor,
@@ -40,10 +41,47 @@ const LiveStudioManager = () => {
   );
 
   // Broadcast Studio Controls State
-  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isCameraOn, setIsCameraOn] = useState(false);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [streamTimer, setStreamTimer] = useState(1420); // seconds
+  const [webcamActive, setWebcamActive] = useState(false);
+
+  const videoRef = useRef(null);
+
+  // Stream WebCam MediaDevices Integration
+  useEffect(() => {
+    let streamObj = null;
+
+    if (isCameraOn) {
+      navigator.mediaDevices?.getUserMedia({ video: true, audio: false })
+        .then((mediaStream) => {
+          streamObj = mediaStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = mediaStream;
+            videoRef.current.play();
+          }
+          setWebcamActive(true);
+        })
+        .catch((err) => {
+          console.warn("Webcam not available or permission denied, fallback to studio graphics", err);
+          setWebcamActive(false);
+        });
+    } else {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      setWebcamActive(false);
+    }
+
+    return () => {
+      if (streamObj) {
+        streamObj.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isCameraOn]);
 
   // Live Timer tick when stream is LIVE NOW
   useEffect(() => {
@@ -254,14 +292,23 @@ const LiveStudioManager = () => {
               <div className="relative aspect-video rounded-2xl bg-black border border-slate-800 overflow-hidden shadow-2xl group">
                 {selectedStream.status === 'LIVE NOW' ? (
                   <>
-                    <img
-                      src="https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80"
-                      alt="Live Broadcast Preview"
-                      className={`w-full h-full object-cover opacity-80 ${!isCameraOn ? 'filter blur-md' : ''}`}
+                    {/* Live Video Element (Webcam Stream) or Fallback Image */}
+                    <video
+                      ref={videoRef}
+                      playsInline
+                      muted
+                      className={`w-full h-full object-cover ${webcamActive ? 'block' : 'hidden'}`}
                     />
+                    {!webcamActive && (
+                      <img
+                        src="https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80"
+                        alt="Live Broadcast Preview"
+                        className="w-full h-full object-cover opacity-85"
+                      />
+                    )}
 
                     {/* Live Stream Overlay Top */}
-                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none z-10">
                       <div className="flex items-center space-x-2">
                         <span className="px-3 py-1 bg-rose-600 text-white font-black text-xs rounded-lg shadow-md flex items-center space-x-1.5 animate-pulse">
                           <span className="w-2 h-2 rounded-full bg-white"></span>
@@ -278,21 +325,28 @@ const LiveStudioManager = () => {
                       </div>
                     </div>
 
-                    {/* Live Watermark Center / Faculty Banner */}
-                    <div className="absolute bottom-16 left-4 bg-slate-950/90 backdrop-blur-md p-2.5 rounded-xl border border-slate-800 text-xs text-white max-w-xs space-y-0.5 shadow-lg">
-                      <p className="font-black text-amber-400">{selectedStream.instructor}</p>
-                      <p className="text-[11px] text-slate-300">Live Accountancy: Partnership Deed & Goodwill</p>
+                    {/* Live Dynamic Watermark Center / Faculty Banner */}
+                    <div className="absolute bottom-16 left-4 bg-slate-950/90 backdrop-blur-md p-3 rounded-2xl border border-slate-800 text-xs text-white max-w-sm space-y-0.5 shadow-xl z-10">
+                      <p className="font-black text-amber-400 flex items-center gap-1.5">
+                        <span>{selectedStream.instructor}</span>
+                        <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 text-[10px] rounded font-bold border border-blue-500/30">
+                          Master Faculty
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-slate-200 font-semibold line-clamp-1">
+                        {selectedStream.title}
+                      </p>
                     </div>
 
                     {/* Interactive Studio Broadcast Controls Bottom Bar */}
-                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent p-3 flex items-center justify-between">
+                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent p-3 flex items-center justify-between z-10">
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => setIsCameraOn(!isCameraOn)}
                           className={`p-2 rounded-xl transition ${isCameraOn ? 'bg-blue-600 text-white' : 'bg-rose-600 text-white'}`}
-                          title={isCameraOn ? 'Disable Camera' : 'Enable Camera'}
+                          title={isCameraOn ? 'Turn Off Webcam Feed' : 'Turn On Live Camera Feed'}
                         >
-                          <Camera className="w-4 h-4" />
+                          {isCameraOn ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
                         </button>
                         <button
                           onClick={() => setIsMicOn(!isMicOn)}

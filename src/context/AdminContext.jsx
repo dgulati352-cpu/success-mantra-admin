@@ -149,7 +149,15 @@ export const AdminProvider = ({ children }) => {
       prev.map((l) => {
         if (l.id === id) {
           const currentViewers = newStatus === 'LIVE NOW' ? Math.floor(Math.random() * 500) + 1000 : 0;
-          return { ...l, status: newStatus, currentViewers };
+          let doubts = l.doubtsQueue || [];
+          if (newStatus === 'LIVE NOW' && doubts.length === 0) {
+            doubts = [
+              { id: `d-${Date.now()}-1`, student: "Dhairya Gulati", question: `Sir, can you please explain ${l.subject} numerical formula step-by-step?`, time: "Just now", status: "Pending" },
+              { id: `d-${Date.now()}-2`, student: "Ananya Sharma", question: "Is this chapter weightage high in CBSE Board Exam?", time: "1 min ago", status: "Pending" },
+              { id: `d-${Date.now()}-3`, student: "Rohan Kapoor", question: "Can we get the PDF notes of this live masterclass in student portal?", time: "2 mins ago", status: "Pinned" },
+            ];
+          }
+          return { ...l, status: newStatus, currentViewers, doubtsQueue: doubts };
         }
         return l;
       })

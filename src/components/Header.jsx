@@ -27,6 +27,7 @@ const Header = () => {
   } = useAdmin();
 
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
   const activeLive = liveClasses.find((l) => l.status === 'LIVE NOW');
 
   return (
@@ -87,49 +88,75 @@ const Header = () => {
         )}
 
         {/* Quick Action Dropdown Trigger */}
-        <div className="relative group">
-          <button className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/25 flex items-center space-x-2 transition transform hover:-translate-y-0.5">
+        <div
+          className="relative"
+          onMouseEnter={() => setShowQuickCreate(true)}
+          onMouseLeave={() => setShowQuickCreate(false)}
+        >
+          <button
+            onClick={() => setShowQuickCreate(!showQuickCreate)}
+            className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-lg shadow-blue-600/25 flex items-center space-x-2 transition transform hover:-translate-y-0.5"
+          >
             <Plus className="w-4 h-4" />
             <span>Quick Create</span>
           </button>
 
-          <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 hidden group-hover:block z-50">
-            <button
-              onClick={() => openModal('course')}
-              className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition"
-            >
-              <GraduationCap className="w-4 h-4 text-blue-400" />
-              <span>Add New Course</span>
-            </button>
-            <button
-              onClick={() => openModal('liveClass')}
-              className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition"
-            >
-              <Video className="w-4 h-4 text-emerald-400" />
-              <span>Schedule Live Class</span>
-            </button>
-            <button
-              onClick={() => openModal('testBuilder')}
-              className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition"
-            >
-              <FileCheck2 className="w-4 h-4 text-purple-400" />
-              <span>Publish NTA Mock Test</span>
-            </button>
-            <button
-              onClick={() => openModal('book')}
-              className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition"
-            >
-              <ShoppingBag className="w-4 h-4 text-amber-400" />
-              <span>Add Book to Store</span>
-            </button>
-            <button
-              onClick={() => openModal('broadcast')}
-              className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition"
-            >
-              <Bell className="w-4 h-4 text-rose-400" />
-              <span>Send Push Notification</span>
-            </button>
-          </div>
+          {showQuickCreate && (
+            <div className="absolute right-0 top-full pt-1.5 w-56 z-50">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 space-y-1">
+                <button
+                  onClick={() => {
+                    openModal('course');
+                    setShowQuickCreate(false);
+                  }}
+                  className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition text-left"
+                >
+                  <GraduationCap className="w-4 h-4 text-blue-400" />
+                  <span>Add New Course</span>
+                </button>
+                <button
+                  onClick={() => {
+                    openModal('liveClass');
+                    setShowQuickCreate(false);
+                  }}
+                  className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition text-left"
+                >
+                  <Video className="w-4 h-4 text-emerald-400" />
+                  <span>Schedule Live Class</span>
+                </button>
+                <button
+                  onClick={() => {
+                    openModal('testBuilder');
+                    setShowQuickCreate(false);
+                  }}
+                  className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition text-left"
+                >
+                  <FileCheck2 className="w-4 h-4 text-purple-400" />
+                  <span>Publish NTA Mock Test</span>
+                </button>
+                <button
+                  onClick={() => {
+                    openModal('book');
+                    setShowQuickCreate(false);
+                  }}
+                  className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition text-left"
+                >
+                  <ShoppingBag className="w-4 h-4 text-amber-400" />
+                  <span>Add Book to Store</span>
+                </button>
+                <button
+                  onClick={() => {
+                    openModal('broadcast');
+                    setShowQuickCreate(false);
+                  }}
+                  className="w-full flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition text-left"
+                >
+                  <Bell className="w-4 h-4 text-rose-400" />
+                  <span>Send Push Notification</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Notifications Icon with Popover */}
